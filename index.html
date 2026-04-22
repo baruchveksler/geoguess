@@ -3,28 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GeoQuest | Coordinate Edition</title>
+    <title>GeoQuest | The Survivor Edition</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link href="https://unpkg.com/mapillary-js@4.1.0/dist/mapillary.css" rel="stylesheet" />
     <style>
-        :root { --primary: #6366f1; --dark: #0f172a; }
+        :root { --primary: #6366f1; --dark: #0f172a; --success: #10b981; }
         body, html { margin: 0; padding: 0; height: 100vh; font-family: system-ui, sans-serif; background: var(--dark); color: white; overflow: hidden; }
         #mly { height: 65vh; background: #000; position: relative; }
         #map-container { height: 35vh; border-top: 2px solid #334155; }
         #guess-map { height: 100%; width: 100%; }
-        .hud { position: absolute; top: 15px; left: 15px; z-index: 1000; background: rgba(15, 23, 42, 0.9); padding: 20px; border-radius: 12px; border: 1px solid #475569; }
-        .btn { background: var(--primary); color: white; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px; }
+        .hud { position: absolute; top: 15px; left: 15px; z-index: 1000; background: rgba(15, 23, 42, 0.9); padding: 20px; border-radius: 12px; border: 1px solid #475569; min-width: 160px; }
+        .btn { background: var(--primary); color: white; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px; transition: 0.2s; }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        #btn-next { display: none; background: var(--success); }
     </style>
 </head>
 <body>
 
     <div id="mly">
         <div class="hud">
-            <div id="round-label">Round 1/5</div>
-            <div id="score-label" style="font-size: 1.5rem; color: #fbbf24;">Score: 0</div>
+            <div id="round-label" style="text-transform: uppercase; font-size: 0.8rem; color: #94a3b8;">Round 1/5</div>
+            <div id="score-label" style="font-size: 1.6rem; color: #fbbf24; font-weight: bold;">Score: 0</div>
             <button id="btn-guess" class="btn" onclick="submitGuess()" disabled>Click Map to Guess</button>
-            <button id="btn-next" class="btn" style="display:none; background:#10b981;" onclick="nextRound()">Next Round</button>
+            <button id="btn-next" class="btn" onclick="nextRound()">Next Round</button>
         </div>
     </div>
     <div id="map-container"><div id="guess-map"></div></div>
@@ -33,10 +34,10 @@
     <script src="https://unpkg.com/mapillary-js@4.1.0/dist/mapillary.js"></script>
 
     <script>
-        // PASTE YOUR TOKEN HERE
+        // 1. YOUR TOKEN GOES HERE
         const MLY_TOKEN = 'MLY|26161386426872305|aea2f8723b77c3ae6b17b7e5b04cba42'; 
 
-        // We use coordinates now, not IDs!
+        // 2. COORDINATES (MUCH SAFER THAN IDs)
         const LOCATIONS = [
             { lat: 48.8584, lng: 2.2945 },    // Paris
             { lat: 35.6895, lng: 139.6917 },   // Tokyo
@@ -48,17 +49,14 @@
         let round = 0, score = 0, selected = null, mly, gMap, gMark, aMark, line;
 
         function init() {
-            // Start the viewer at the first location's coordinates
+            // Setup Viewer
             mly = new mapillary.Viewer({
                 accessToken: MLY_TOKEN,
                 container: 'mly',
                 component: { cover: false }
             });
 
-            // Find the nearest available image to our coordinates
-            mly.moveCloseTo(LOCATIONS[round].lat, LOCATIONS[round].lng)
-               .catch(err => console.error("Initial load failed", err));
-
+            // Setup Guess Map
             gMap = L.map('guess-map').setView([20, 0], 2);
             L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(gMap);
 
@@ -68,6 +66,19 @@
                 if (gMark) gMap.removeLayer(gMark);
                 gMark = L.marker(selected).addTo(gMap);
                 document.getElementById('btn-guess').disabled = false;
+                document.getElementById('btn-guess').innerText = "Submit Guess";
+            });
+
+            loadView();
+        }
+
+        function loadView() {
+            const loc = LOCATIONS[round];
+            // moveCloseTo finds the NEAREST active image to these coords
+            mly.moveCloseTo(loc.lat, loc.lng).catch(() => {
+                console.warn("No image exactly here, retrying slightly offset...");
+                // If it fails, try a very slight offset (about 100 meters away)
+                mly.moveCloseTo(loc.lat + 0.001, loc.lng + 0.001).catch(() => nextRound());
             });
         }
 
@@ -78,7 +89,7 @@
             score += pts;
 
             document.getElementById('score-label').innerText = `Score: ${score}`;
-            aMark = L.circleMarker(actual, {color: '#10b981'}).addTo(gMap);
+            aMark = L.circleMarker(actual, {color: '#10b981', radius: 8}).addTo(gMap);
             line = L.polyline([selected, actual], {color: 'white', weight: 2, dashArray: '5,10'}).addTo(gMap);
             gMap.fitBounds(line.getBounds(), {padding: [50, 50]});
 
@@ -94,19 +105,20 @@
                 return;
             }
 
+            // Reset UI
             document.getElementById('btn-guess').style.display = 'block';
             document.getElementById('btn-guess').disabled = true;
+            document.getElementById('btn-guess').innerText = "Click Map to Guess";
             document.getElementById('btn-next').style.display = 'none';
             document.getElementById('round-label').innerText = `Round ${round + 1}/5`;
 
+            // Reset Map
             if (gMark) gMap.removeLayer(gMark);
-            if (aMark) gMap.removeLayer(aMarker);
+            if (aMark) gMap.removeLayer(aMark);
             if (line) gMap.removeLayer(line);
             gMap.setView([20, 0], 2);
 
-            // Move to the next set of coordinates
-            mly.moveCloseTo(LOCATIONS[round].lat, LOCATIONS[round].lng)
-               .catch(() => nextRound()); // If no image exists nearby, skip to next round
+            loadView();
         }
 
         window.onload = init;
