@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StreetView Quest | Mapillary Edition</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://unpkg.com/mapillary-js@4.1.0/dist/mapillary.css" rel="stylesheet" />
+    <style>
+        :root { --bg: #0f172a; --accent: #6366f1; }
+        body { margin: 0; background: var(--bg); color: white; font-family: system-ui, sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        
+        /* Top Viewer */
+        #mly { flex: 1; background: #000; position: relative; }
+        
+        /* Bottom Guessing Area */
+        #map-container { height: 35vh; border-top: 3px solid #334155; position: relative; }
+        #guess-map { height: 100%; width: 100%; }
+
+        /* UI Elements */
+        .hud { position: absolute; top: 20px; left: 20px; z-index: 1000; background: rgba(15, 23, 42, 0.9); padding: 15px; border-radius: 12px; border: 1px solid #475569; pointer-events: auto; }
+        .btn { background: var(--accent); color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: bold; margin-top: 10px; width: 100%; transition: 0.2s; }
+        .btn:disabled { background: #334155; opacity: 0.6; cursor: not-allowed; }
+        .btn:hover:not(:disabled) { background: #4f46e5; }
+        #next-btn { display: none; background: #10b981; }
+    </style>
+</head>
+<body>
+
+    <div id="mly">
+        <div class="hud">
+            <div id="round-txt">Round: 1/5</div>
+            <div id="score-txt" style="font-size: 1.3rem; color: #fbbf24; font-weight: 800;">Score: 0</div>
+            <button id="guess-btn" class="btn" onclick="handleGuess()" disabled>Click Map to Guess</button>
+            <button id="next-btn" class="btn" onclick="nextRound()">Next Round</button>
+        </div>
+    </div>
+
+    <div id="map-container">
+        <div id="guess-map"></div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/mapillary-js@4.1.0/dist/mapillary.js"></script>
+    <script>
+        // --- SETUP ---
+        // Replace with your token from Mapillary Dashboard
+        const MLY_TOKEN = 'MLY|9339247162780650|129486c90538f5e3e29f8f4848d68962'; 
+
+        const LOCATIONS = [
+            { id: '494134655267073', lat: 48.8584, lng: 2.2945 }, // Paris
+            { id: '1657853121245781', lat: 40.7580, lng: -73.9855 }, // NYC
+            { id: '286909849339906', lat: 35.6895, lng: 139.6917 }, // Tokyo
+            { id: '517724399581898', lat: 51.5007, lng: -0.1246 }, // London
+            { id: '1138541816664971', lat: -22.9519, lng: -43.2105 } // Rio
+        ].sort(() => Math.random() - 0.5);
+
+        let round = 0, totalScore = 0, selectedPos = null, mly, gMap, gMarker, aMarker, line;
+
+        function init() {
+            // 1. Initialize Mapillary
+            mly = new mapillary.Viewer({
+                accessToken: MLY_TOKEN,
+                container: 'mly',
+                imageId: LOCATIONS[0].id,
+                component: { cover: false, streetview: true }
+            });
+
+            // 2. Initialize Guess Map
+            gMap = L.map('guess-map').setView([20, 0], 2);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; OpenStreetMap'
+            }).addTo(gMap);
+
+            gMap.on('click', (e) => {
+                if (document.getElementById('next-btn').style.display === 'block') return;
+                selectedPos = e.latlng;
+                if (gMarker) gMap.removeLayer(gMarker);
+                gMarker = L.marker(selectedPos).addTo(gMap);
+                document.getElementById('guess-btn').disabled = false;
+            });
+        }
+
+        function handleGuess() {
+            const actual = [LOCATIONS[round].lat, LOCATIONS[round].lng];
+            const dist = gMap.distance(selectedPos, actual) / 1000;
+            const points = Math.max(0, Math.round(5000 * Math.exp(-dist / 2000)));
+            
+            totalScore += points;
+            document.getElementById('score-txt').innerText = `Score: ${totalScore}`;
+
+            aMarker = L.circleMarker(actual, { color: '#10b981', radius: 8 }).addTo(gMap);
+            line = L.polyline([selectedPos, actual], { color: 'white', weight: 2, dashArray: '5,10' }).addTo(gMap);
+            gMap.fitBounds(line.getBounds(), { padding: [40, 40] });
+
+            document.getElementById('guess-btn').style.display = 'none';
+            document.getElementById('next-btn').style.display = 'block';
+        }
+
+        function nextRound() {
+            round++;
+            if (round >= LOCATIONS.length) {
+                alert(`Game Complete! Final Score: ${totalScore}`);
+                location.reload();
+                return;
+            }
+            
+            // Reset UI
+            document.getElementById('guess-btn').style.display = 'block';
+            document.getElementById('guess-btn').disabled = true;
+            document.getElementById('next-btn').style.display = 'none';
+            document.getElementById('round-txt').innerText = `Round: ${round + 1}/5`;
+            
+            if (gMarker) gMap.removeLayer(gMarker);
+            if (aMarker) gMap.removeLayer(aMarker);
+            if (line) gMap.removeLayer(line);
+            
+            gMap.setView([20, 0], 2);
+            mly.moveTo(LOCATIONS[round].id);
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
