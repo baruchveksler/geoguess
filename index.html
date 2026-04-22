@@ -9,12 +9,10 @@
     <style>
         :root { --primary: #6366f1; --dark: #0f172a; --success: #10b981; }
         body, html { margin: 0; padding: 0; height: 100vh; font-family: system-ui, sans-serif; background: var(--dark); color: white; overflow: hidden; }
-        
         #game-container { display: flex; flex-direction: column; height: 100%; }
         #mly { flex: 6.5; background: #000; position: relative; }
         #map-area { flex: 3.5; border-top: 2px solid #334155; position: relative; }
         #guess-map { height: 100%; width: 100%; }
-
         .hud { 
             position: absolute; top: 15px; left: 15px; z-index: 1000; 
             background: rgba(15, 23, 42, 0.9); padding: 20px; border-radius: 12px; 
@@ -41,9 +39,7 @@
             <button id="btn-next" class="btn" onclick="nextRound()">Next Round</button>
         </div>
     </div>
-    <div id="map-area">
-        <div id="guess-map"></div>
-    </div>
+    <div id="map-area"><div id="guess-map"></div></div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -54,29 +50,25 @@
     const MLY_TOKEN = 'MLY|26161386426872305|aea2f8723b77c3ae6b17b7e5b04cba42'; 
 
     const LOCATIONS = [
-        { lat: 48.8584, lng: 2.2945, name: "Paris" },
-        { lat: 35.6895, lng: 139.6917, name: "Tokyo" },
-        { lat: 51.5007, lng: -0.1246, name: "London" },
-        { lat: 40.7580, lng: -73.9855, name: "New York" },
-        { lat: -22.9519, lng: -43.2105, name: "Rio" }
+        { lat: 48.8584, lng: 2.2945 },
+        { lat: 35.6895, lng: 139.6917 },
+        { lat: 51.5007, lng: -0.1246 },
+        { lat: 40.7580, lng: -73.9855 },
+        { lat: -22.9519, lng: -43.2105 }
     ].sort(() => Math.random() - 0.5);
 
     let round = 0, totalScore = 0, selectedPos = null;
     let mly, gMap, gMarker, aMarker, polyline;
 
     function init() {
-        // Initialize Mapillary v4
         mly = new mapillary.Viewer({
             accessToken: MLY_TOKEN,
             container: 'mly',
             component: { cover: false }
         });
 
-        // Initialize Guess Map
         gMap = L.map('guess-map').setView([20, 0], 2);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; OpenStreetMap'
-        }).addTo(gMap);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(gMap);
 
         gMap.on('click', (e) => {
             if (document.getElementById('btn-next').style.display === 'block') return;
@@ -89,9 +81,9 @@
         loadLocation();
     }
 
-    // Helper to find the closest image ID via Mapillary Graph API
     async function loadLocation() {
         const loc = LOCATIONS[round];
+        // Fetch the nearest image ID manually since moveCloseTo is gone in v4
         const url = `https://graph.mapillary.com/images?access_token=${MLY_TOKEN}&fields=id&limit=1&closeto=${loc.lng},${loc.lat}`;
 
         try {
@@ -99,55 +91,44 @@
             const result = await response.json();
 
             if (result.data && result.data.length > 0) {
-                const imageId = result.data[0].id;
-                mly.moveTo(imageId).catch(() => {
-                    console.error("View failed to load, skipping...");
-                    nextRound();
-                });
+                mly.moveTo(result.data[0].id).catch(() => nextRound());
             } else {
-                console.warn("No imagery found near these coords, skipping...");
                 nextRound();
             }
         } catch (err) {
-            console.error("API Fetch Error:", err);
             nextRound();
         }
     }
 
     function submitGuess() {
         const actual = [LOCATIONS[round].lat, LOCATIONS[round].lng];
-        const distance = gMap.distance(selectedPos, actual) / 1000; // in km
+        const distance = gMap.distance(selectedPos, actual) / 1000;
         const points = Math.max(0, Math.round(5000 * Math.exp(-distance / 2000)));
         
         totalScore += points;
         document.getElementById('score-txt').innerText = `Score: ${totalScore}`;
 
-        // Map Graphics
         aMarker = L.circleMarker(actual, { color: '#10b981', radius: 8 }).addTo(gMap);
         polyline = L.polyline([selectedPos, actual], { color: 'white', weight: 2, dashArray: '5, 10' }).addTo(gMap);
         gMap.fitBounds(polyline.getBounds(), { padding: [50, 50] });
 
         document.getElementById('btn-guess').style.display = 'none';
         document.getElementById('btn-next').style.display = 'block';
-        
-        alert(`Distance: ${distance.toFixed(1)} km\nPoints: +${points}`);
     }
 
     function nextRound() {
         round++;
         if (round >= LOCATIONS.length) {
-            alert(`Game Finished! Final Score: ${totalScore}`);
+            alert(`Final Score: ${totalScore}`);
             location.reload();
             return;
         }
 
-        // Reset UI
         document.getElementById('btn-guess').style.display = 'block';
         document.getElementById('btn-guess').disabled = true;
         document.getElementById('btn-next').style.display = 'none';
         document.getElementById('round-txt').innerText = `Round ${round + 1}/5`;
 
-        // Clear Map
         if (gMarker) gMap.removeLayer(gMarker);
         if (aMarker) gMap.removeLayer(aMarker);
         if (polyline) gMap.removeLayer(polyline);
