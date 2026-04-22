@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GeoQuest | Fixed Edition</title>
+    <title>GeoQuest | Coordinate Edition</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link href="https://unpkg.com/mapillary-js@4.1.0/dist/mapillary.css" rel="stylesheet" />
     <style>
@@ -12,14 +12,8 @@
         #mly { height: 65vh; background: #000; position: relative; }
         #map-container { height: 35vh; border-top: 2px solid #334155; }
         #guess-map { height: 100%; width: 100%; }
-        .hud { 
-            position: absolute; top: 15px; left: 15px; z-index: 1000; 
-            background: rgba(15, 23, 42, 0.9); padding: 20px; border-radius: 12px; border: 1px solid #475569;
-        }
-        .btn { 
-            background: var(--primary); color: white; border: none; padding: 12px; 
-            border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px;
-        }
+        .hud { position: absolute; top: 15px; left: 15px; z-index: 1000; background: rgba(15, 23, 42, 0.9); padding: 20px; border-radius: 12px; border: 1px solid #475569; }
+        .btn { background: var(--primary); color: white; border: none; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px; }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; }
     </style>
 </head>
@@ -39,38 +33,31 @@
     <script src="https://unpkg.com/mapillary-js@4.1.0/dist/mapillary.js"></script>
 
     <script>
-        // REPLACE WITH YOUR TOKEN
+        // PASTE YOUR TOKEN HERE
         const MLY_TOKEN = 'MLY|26161386426872305|aea2f8723b77c3ae6b17b7e5b04cba42'; 
 
-        // Verified Active IDs (April 2026)
+        // We use coordinates now, not IDs!
         const LOCATIONS = [
-            { id: '1723528221356877', lat: 48.8584, lng: 2.2945 }, // Paris
-            { id: '438682857416353', lat: 35.6895, lng: 139.6917 }, // Tokyo
-            { id: '494134655267073', lat: 51.5007, lng: -0.1246 }, // London
-            { id: '622434052445831', lat: 40.7580, lng: -73.9855 }, // NYC (Fresh ID)
-            { id: '1058284718165609', lat: -22.9519, lng: -43.2105 } // Rio
+            { lat: 48.8584, lng: 2.2945 },    // Paris
+            { lat: 35.6895, lng: 139.6917 },   // Tokyo
+            { lat: 51.5007, lng: -0.1246 },    // London
+            { lat: 40.7580, lng: -73.9855 },   // NYC
+            { lat: -22.9519, lng: -43.2105 }   // Rio
         ].sort(() => Math.random() - 0.5);
 
         let round = 0, score = 0, selected = null, mly, gMap, gMark, aMark, line;
 
         function init() {
-            try {
-                mly = new mapillary.Viewer({
-                    accessToken: MLY_TOKEN,
-                    container: 'mly',
-                    imageId: LOCATIONS[round].id,
-                    component: { cover: false }
-                });
+            // Start the viewer at the first location's coordinates
+            mly = new mapillary.Viewer({
+                accessToken: MLY_TOKEN,
+                container: 'mly',
+                component: { cover: false }
+            });
 
-                // Safety: If the initial ID fails, move to next
-                mly.on('error', (e) => {
-                    console.warn("Image failed to load, skipping...", e);
-                    nextRound();
-                });
-
-            } catch (e) {
-                console.error("Viewer crashed", e);
-            }
+            // Find the nearest available image to our coordinates
+            mly.moveCloseTo(LOCATIONS[round].lat, LOCATIONS[round].lng)
+               .catch(err => console.error("Initial load failed", err));
 
             gMap = L.map('guess-map').setView([20, 0], 2);
             L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(gMap);
@@ -113,14 +100,13 @@
             document.getElementById('round-label').innerText = `Round ${round + 1}/5`;
 
             if (gMark) gMap.removeLayer(gMark);
-            if (aMark) gMap.removeLayer(aMark);
+            if (aMark) gMap.removeLayer(aMarker);
             if (line) gMap.removeLayer(line);
             gMap.setView([20, 0], 2);
 
-            // Using moveTo with a check to ensure viewer is ready
-            setTimeout(() => {
-                mly.moveTo(LOCATIONS[round].id).catch(() => nextRound());
-            }, 500);
+            // Move to the next set of coordinates
+            mly.moveCloseTo(LOCATIONS[round].lat, LOCATIONS[round].lng)
+               .catch(() => nextRound()); // If no image exists nearby, skip to next round
         }
 
         window.onload = init;
